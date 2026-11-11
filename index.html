@@ -288,7 +288,7 @@ code{background:#232326;border-radius:6px;padding:1px 6px;font-size:12.5px;font-
 .module-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 @media(max-width:900px){.module-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.module-grid{grid-template-columns:1fr}}
-.module-tile{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:var(--radius);padding:18px;text-align:left;cursor:pointer;font:inherit;color:var(--ink);display:block;width:100%}
+.module-tile{position:relative;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:var(--radius);padding:18px;text-align:left;cursor:pointer;font:inherit;color:var(--ink);display:block;width:100%}
 .module-tile:hover{box-shadow:0 0 0 1px rgba(201,162,39,.25),0 10px 26px rgba(0,0,0,.35)}
 .module-tile .mi{width:40px;height:40px;border-radius:10px;background:var(--blue-soft);color:var(--blue2);display:grid;place-items:center;margin-bottom:12px}
 .module-tile .mi svg{width:20px;height:20px}
@@ -490,18 +490,11 @@ img,svg,canvas,video{max-width:100%}
   .pre-top nav button{flex:1}
 }
 
-/* ---------- COMPACT KEY BANNER (Amex-style) ---------- */
-.key-banner{position:relative;display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:12px;padding:10px 14px;color:#fff;background:linear-gradient(92deg,#0B2E4F 0%,#0E5E6F 42%,#12736B 68%,#A8821F 130%);border:1px solid rgba(227,197,101,.55);box-shadow:0 10px 24px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.22);animation:wcIn .5s cubic-bezier(.22,.8,.32,1) both}
-.key-banner .kb-chip{width:34px;height:26px;flex:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
-.key-banner .kb-dot{width:9px;height:9px;border-radius:50%;background:#2FBF71;box-shadow:0 0 8px rgba(47,191,113,.95);flex:none;animation:chipPulse 1.8s ease-in-out infinite}
-.key-banner .kb-dot.red{background:#EE5A4E;box-shadow:0 0 8px rgba(238,90,78,.9)}
-.key-banner .kb-dot.amber{background:#F2B33D;box-shadow:0 0 8px rgba(242,179,61,.9)}
-.key-banner .kb-key{font-family:var(--mono);font-weight:600;font-size:clamp(13.5px,3.4vw,16.5px);letter-spacing:.04em;color:#FFF7DC;overflow-wrap:anywhere;line-height:1.3}
-.key-banner .kb-meta{font-size:11.5px;color:rgba(255,247,220,.85);font-weight:600;white-space:nowrap}
-.key-banner .kb-btns{display:flex;gap:7px;margin-left:auto;flex-wrap:wrap}
-.key-banner .kb-btn{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.45);color:#fff;border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:700;cursor:pointer;min-height:30px;font-family:inherit}
-.key-banner .kb-btn:hover{background:rgba(255,255,255,.26)}
-.key-banner .kb-btn svg{width:12px;height:12px}
+/* ---------- ACCESS KEY — PLAIN LINE ---------- */
+.key-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel3);border:1px solid var(--line);border-radius:10px;padding:11px 14px}
+.key-line .kl-key{font-family:var(--mono);font-weight:600;font-size:15.5px;letter-spacing:.03em;color:#fff;overflow-wrap:anywhere;line-height:1.35}
+.key-line .kl-meta{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);font-weight:600;flex-wrap:wrap}
+.key-line .kl-btns{display:flex;gap:7px;margin-left:auto;flex-wrap:wrap}
 /* ---------- WALLET CARD — AMEX STYLE, NAME-ONLY FRONT ---------- */
 .wallet-card.amex{background:linear-gradient(118deg,#071E33 0%,#0B3D5F 30%,#0E7C7B 62%,#C9A227 135%);border-color:rgba(227,197,101,.6);cursor:pointer}
 .wallet-card.amex .wc-name{font-family:Manrope,sans-serif;font-weight:800;font-size:clamp(19px,4.6vw,25px);letter-spacing:.05em;color:#fff;text-transform:uppercase;margin-top:20px;text-shadow:0 2px 10px rgba(0,0,0,.4);overflow-wrap:anywhere}
@@ -903,7 +896,7 @@ function newState(key, resp){
     keyStatusBackend: k.status || "ACTIVE",
     deviceStatus: "This device · Authorized",
     deviceLimit: k.device_limit || 1,
-    referralCode: "", email: "",
+    referralCode: "", referralLink: "", referredCount: 0, email: "",
     holderName: "",
     devices: [],
     walletBalance: 0,
@@ -1123,6 +1116,7 @@ function mapLedgerRow(t){
 function loadBackendExtras(){
   if(!S) return;
   loadHistory();
+  loadReferral();
   apiCall("/api/wallet", "GET").then(function(data){
     var w = (data && data.wallet) || null;
     if(w){
@@ -1231,8 +1225,8 @@ function navTo(page){
   countUps(div); animateBars(div);
   if(page === "overview") animateRing();
   if(page === "plans") renderAppCheckout();
-  if(page === "wallet") renderWalletCheckout();
-  if(page === "referral") renderRefQR();
+  if(page === "wallet"){ renderWalletCheckout(); loadTopupRequests(); }
+  if(page === "referral"){ renderRefQR(); loadReferral(); }
 }
 /* Live status badges — one mapping used everywhere:
    ACTIVE / PAID / APPROVED = green, EXPIRED / DECLINED = red,
@@ -1545,6 +1539,20 @@ function startTopup(){
   setTimeout(function(){ var c = $("wallet-checkout"); if(c) c.scrollIntoView({behavior:"smooth", block:"start"}); }, 60);
   toast("<b>Top-up session started</b> for " + inr(topupSel) + ". Pay by UPI and submit the UTR + screenshot — the amount is credited after Admin approval.");
 }
+function loadTopupRequests(){
+  var el = $("topup-requests"); if(!el || !S) return;
+  apiCall("/api/wallet/topups", "GET").then(function(data){
+    var list = (data && (data.topups || data.requests || data.items)) || [];
+    if(!Array.isArray(list) || !list.length){ el.innerHTML = '<div class="empty" style="border:0;padding:12px"><b>No top-up requests yet</b>Top-ups you submit will appear here with their status.</div>'; return; }
+    el.innerHTML = list.map(function(t){
+      var st = String(t.status || "PROCESSING").toUpperCase();
+      var when = t.created_at ? fmtDT(t.created_at) : (t.when || t.date || "");
+      return '<div style="display:flex;gap:10px;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line2);flex-wrap:wrap"><div style="flex:1;min-width:150px"><b style="color:#fff">' + inr(t.amount) + '</b><div class="muted small">UTR <span class="mono">' + esc(t.utr || "—") + '</span></div></div><span class="muted small">' + esc(when) + '</span>' + statusBadge(st) + '</div>';
+    }).join("");
+  }).catch(function(e){
+    el.innerHTML = '<div class="banner red" style="margin:6px 0 12px"><span class="bi">●</span><div><b>Could not load top-up requests.</b><br><span class="small">' + esc((e && e.message) || "Server error.") + '</span></div></div>';
+  });
+}
 function renderWalletCheckout(){
   var c = $("wallet-checkout"); if(!c) return;
   var ps = getPaySession();
@@ -1611,6 +1619,7 @@ function submitWalletPayment(ps, amount){
   var record = {id:"PAY-" + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 90 + 10), idem:ps.idem, planId:ps.planId, planName:ps.planName, kind:ps.kind, extDays:ps.extDays, amount:amount, email:(S ? S.email : "") || "", utr:"WALLET", screenshot:"Wallet payment", method:"WALLET", walletAmount:amount, status:"PROCESSING", when:fmtDT(new Date()), ts:Date.now(), declineReason:"", keyValue:""};
   function done(){
     pays.unshift(record); savePayments(pays);
+    if(S) refreshPaymentsFromBackend();
     lsDel("paysession");
     pushPayNotif("•", "Wallet payment submitted — PROCESSING", "Your " + record.planName + " payment of " + inr(record.amount) + " from your wallet is with Admin for approval. Request ID: " + record.id + ".");
     if(S) pushNotif("•", "Wallet payment submitted — PROCESSING", "Request " + record.id + " for " + record.planName + " is awaiting Admin approval. The wallet amount is deducted on approval.");
@@ -1752,13 +1761,12 @@ function doSearch(fromPage){
     }, 350);
   }
   apiCall("/api/lookup", "POST", {num:v.num, category:"number"}).then(function(resp){
-    var r = resp ? resp.result : null;
-    if(r == null || (typeof r === "object" && !Object.keys(r).length)){
+    var fields = normalizeResult(v.num, resp || {});
+    var hasData = (typeof fields.valid === "boolean") || !!fields.operator || !!fields.circle || (typeof fields.records === "number");
+    if(!hasData){
       finish(false, '<div class="banner amber" style="margin-top:16px"><span class="bi">●</span><div><b>No data found.</b><br><span class="small">The lookup returned no information for this number.</span></div></div>'); return;
     }
-    if(typeof r !== "object") r = {status:String(r)};
-    if(S) S.rawResponses[v.num] = resp; // full backend response for the Technical Response viewer
-    finish(true, {fields:normalizeResult(v.num, r), meta:resp});
+    finish(true, {fields:fields, meta:resp});
   }).catch(function(err){
     var msg;
     if(err && err.code === "TIMEOUT") msg = "<b>Lookup timed out.</b><br><span class='small'>The server did not respond in time. Your search was not counted — try again.</span>";
@@ -1785,28 +1793,23 @@ function doSearch(fromPage){
     finish(false, '<div class="banner red" style="margin-top:16px"><span class="bi">●</span><div>' + msg + '</div></div>');
   });
 }
-function normalizeResult(num, r){
-  // Only fields the backend actually returned are shown — nested
-  // envelope objects (data / result / details) are flattened one level,
-  // nothing is added or guessed.
-  var flat = {};
-  Object.keys(r).forEach(function(k){ flat[k] = r[k]; });
-  ["data", "result", "details"].forEach(function(env){
-    var inner = r[env];
-    if(inner && typeof inner === "object" && !Array.isArray(inner)){
-      Object.keys(inner).forEach(function(k){ if(!(k in flat)) flat[k] = inner[k]; });
-      delete flat[env];
-    }
-  });
-  var out = {number: flat.number || flat.query || flat.num || num};
-  var map = {valid:"valid", isValid:"valid", status:"status", operator:"operator", carrier:"operator", country:"country", lineType:"lineType", type:"lineType", region:"region", circle:"circle", ported:"ported", network:"network"};
-  Object.keys(flat).forEach(function(k){
-    if(k === "number" || k === "query" || k === "num") return;
-    var v = flat[k];
-    if(v == null || typeof v === "object") return;
-    out[map[k] || k] = v;
-  });
-  if(typeof out.valid !== "boolean" && out.status) out.valid = String(out.status).toLowerCase() === "valid";
+function normalizeResult(num, resp){
+  // The backend returns a safe summary only:
+  // {valid, operator, circle, records, status, remaining_today} —
+  // possibly wrapped in a result envelope. ONLY those fields are
+  // picked up; anything else the response carries is never shown.
+  var r = (resp && typeof resp.result === "object" && resp.result) ? resp.result : (resp || {});
+  var out = {number: num};
+  if(typeof r.valid === "boolean") out.valid = r.valid;
+  else if(r.status && /^valid$/i.test(String(r.status))) out.valid = true;
+  else if(r.status && /^invalid$/i.test(String(r.status))) out.valid = false;
+  if(r.operator) out.operator = String(r.operator);
+  if(r.circle) out.circle = String(r.circle);
+  if(typeof r.records === "number") out.records = r.records;
+  else if(typeof r.total_records === "number") out.records = r.total_records;
+  if(r.status) out.status = String(r.status);
+  var rem = (typeof r.remaining_today === "number") ? r.remaining_today : (resp && typeof resp.remaining_today === "number" ? resp.remaining_today : null);
+  if(rem !== null) out.remaining = rem;
   return out;
 }
 function consumeQuota(){
@@ -1824,8 +1827,9 @@ function applyResult(box, num, payload){
   consumeQuota();
   // The backend count is authoritative — align today's usage with the
   // remaining_today returned by the lookup response.
-  if(payload.meta && typeof payload.meta.remaining_today === "number"){
-    var usedToday = S.dailyLimit - payload.meta.remaining_today;
+  var remToday = (payload.meta && typeof payload.meta.remaining_today === "number") ? payload.meta.remaining_today : (typeof r.remaining === "number" ? r.remaining : null);
+  if(remToday !== null){
+    var usedToday = S.dailyLimit - remToday;
     S.dailyUsed = Math.max(0, Math.min(S.dailyLimit, usedToday));
     if(S.planId === "free"){
       S.freeUsed = S.dailyUsed;
@@ -1852,38 +1856,29 @@ function applyResult(box, num, payload){
   if(currentPage === "overview") setTimeout(animateRing, 60);
 }
 function fieldLabel(k){
-  return {valid:"Valid / Invalid", operator:"Operator", country:"Country", lineType:"Line Type", status:"Status", region:"Region", circle:"Circle", ported:"Ported", network:"Network"}[k] || k.replace(/([A-Z])/g, " $1").replace(/^./, function(c){ return c.toUpperCase(); });
+  return {valid:"Valid / Invalid", operator:"Operator", circle:"Circle", records:"Records Found", remaining:"Searches Remaining", status:"Status"}[k] || k.replace(/([A-Z])/g, " $1").replace(/^./, function(c){ return c.toUpperCase(); });
 }
 function resultHTML(r){
-  var keys = Object.keys(r).filter(function(k){ return k !== "number" && r[k] !== "" && r[k] != null; });
-  if(!keys.length) return '<div class="empty" style="margin-top:16px"><b>No data</b>The lookup returned no fields for this number.</div>';
+  // Only the safe summary is displayed: Valid/Invalid, Operator,
+  // Circle, Records found and Searches remaining. No personal data
+  // and no raw API response is ever rendered here.
   var valid = r.valid;
-  var items = keys.map(function(k){
-    var val = r[k];
-    var disp = typeof val === "boolean" ? (val ? "Yes" : "No") : String(val);
-    if(k === "valid") disp = val ? "Valid" : "Invalid";
-    return '<div class="item"><div class="k">' + esc(fieldLabel(k)) + '</div><div class="v">' + esc(disp) + '</div><button class="copy-btn" onclick="copyText(\'' + esc(String(val)).replace(/'/g, "") + '\', \'' + esc(fieldLabel(k)) + '\')">Copy</button></div>';
-  }).join("");
-  var reported = S.reported[r.number];
-  var savedE = savedEntry(r.number);
-  var spamDone = !!S.spamReported[r.number];
+  function item(k, v){ return '<div class="item"><div class="k">' + k + '</div><div class="v">' + esc(v) + '</div></div>'; }
+  var items = "";
+  if(r.operator) items += item("Operator", r.operator);
+  if(r.circle) items += item("Circle", r.circle);
+  if(typeof r.records === "number") items += item("Records Found", String(r.records));
+  if(typeof r.remaining === "number") items += item("Searches Remaining", String(r.remaining));
+  if(!items && r.status) items += item("Status", r.status);
   return '<div class="card result-card" style="margin-top:16px">' +
   '<div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:200px">' +
-  (typeof valid === "boolean" ? '<span class="chip ' + (valid ? "green" : "red") + '">' + (valid ? "✓ Valid number" : "✕ Invalid number") + '</span>' : '<span class="chip blue">Lookup result</span>') +
-  '<h3 class="mono" style="margin:9px 0 2px;font-size:21px">' + esc(r.number) + '</h3>' +
-  '<p class="muted" style="margin:0;font-size:13.5px">International format: +91 ' + esc(String(r.number).slice(0, 5)) + ' ' + esc(String(r.number).slice(5)) + '</p></div>' +
+  (typeof valid === "boolean" ? '<span class="chip ' + (valid ? "green" : "red") + '">' + (valid ? "✓ Valid number" : "✕ Invalid number") + '</span>' : (r.status ? '<span class="chip blue">' + esc(r.status) + '</span>' : '<span class="chip blue">Lookup result</span>')) +
+  '<h3 class="mono" style="margin:9px 0 2px;font-size:21px">' + esc(r.number) + '</h3></div>' +
   '<button class="btn btn-ghost btn-sm" onclick="copyText(\'' + esc(r.number) + '\', \'Number\')">Copy Number</button></div>' +
-  '<div class="kv" style="margin-top:16px">' + items + '</div>' +
-  spamMeterHTML(r) +
-  '<details class="tech"><summary>Technical Response</summary><pre><code>' + esc(JSON.stringify((S.rawResponses && S.rawResponses[r.number]) || r, null, 2)) + '</code></pre></details>' +
+  (items ? '<div class="kv" style="margin-top:16px">' + items + '</div>' : "") +
   '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:16px">' +
-  (savedE ? '<button class="btn btn-ghost btn-sm" onclick="removeSaved(\'' + esc(r.number) + '\')">★ Saved — Remove</button>' : '<button class="btn btn-ghost btn-sm" onclick="toggleSaveRow(\'' + esc(r.number) + '\')">☆ Save Number</button>') +
-  (spamDone ? '<span class="chip red">Spam reported</span>' : '<button class="btn btn-ghost btn-sm" onclick="reportSpam(\'' + esc(r.number) + '\')">⚑ Report Spam</button>') +
-  (reported ? '<span class="chip amber">Issue reported</span>' : '<button class="btn btn-ghost btn-sm" onclick="reportIssue(\'' + esc(r.number) + '\')">Report an Issue</button>') +
   '<button class="btn btn-primary btn-sm" onclick="navTo(\'search\')">New Search</button>' +
-  '<button class="btn btn-ghost btn-sm" onclick="navTo(\'history\')">History</button></div>' +
-  '<div class="save-row" id="save-row-' + esc(r.number) + '"><input type="text" id="save-label-' + esc(r.number) + '" placeholder="Label — e.g. Home, Office, Delivery" maxlength="40" aria-label="Label for saved number"><button class="btn btn-primary btn-sm" onclick="confirmSaveNumber(\'' + esc(r.number) + '\')">Save</button></div>' +
-  '<p class="tiny muted" style="margin:12px 0 0">Only fields returned by the lookup are shown; nothing is added or guessed.</p>' + '</div>';
+  '<button class="btn btn-ghost btn-sm" onclick="navTo(\'history\')">History</button></div></div>';
 }
 function reportIssue(q){
   S.reported[q] = true; touch();
@@ -2012,23 +2007,37 @@ function warnBanners(){
 }
 function moduleTiles(){
   var tiles = [
-    {id:"search", t:"Number Lookup", d:"Validate a 10-digit number."},
-    {id:"plans", t:"Plans & Payment", d:"Buy, extend and track payments."},
-    {id:"wallet", t:"Wallet", d:"Balance and wallet history."},
+    {id:"search", t:"Number Lookup", d:"Check validity, operator & circle."},
+    {id:"plans", t:"Plans & Payment", d:"Buy a key or extend your plan."},
+    {id:"wallet", t:"Wallet", d:"Balance, top-up and your card."},
+    {id:"referral", t:"Referral", d:"Your code, link and rewards."},
+    {id:"history", t:"Search History", d:"Your past lookups and results."},
+    {id:"notifications", t:"Notifications", d:"Approvals, key delivery and alerts."},
+    {id:"profile", t:"Profile", d:"Key, plan, session and devices."},
+    {id:"support", t:"Support", d:"Help, FAQs and support tickets."},
     {id:"keyhistory", t:"Key History", d:"Keys generated for you."},
     {id:"payhistory", t:"Payment History", d:"Submitted payment requests."},
-    {id:"referral", t:"Referral", d:"Your code, wallet and referrals."},
-    {id:"history", t:"Search History", d:"Your searches from the last 90 days."},
     {id:"saved", t:"Saved Numbers", d:"Favourites with labels — search in one tap."},
-    {id:"notifications", t:"Notifications", d:"Keys, approvals and reminders."},
-    {id:"profile", t:"Profile", d:"Key, plan, session and account."}
+    {id:"keygen", t:"Key Generator", d:"Generate user keys — up to 1 month."},
+    {id:"usersmgmt", t:"Users", d:"Key holders and warnings."},
+    {id:"tickets", t:"Support Tickets", d:"User questions and issues."}
   ];
-  var icons = {}; NAV.forEach(function(n){ icons[n.id] = n.icon; });
+  var icons = {}; NAV.concat(EXTRA_NAV).forEach(function(n){ icons[n.id] = n.icon; });
   var allowed = {}; navList().forEach(function(n){ allowed[n.id] = true; });
+  var unread = S ? S.notifs.filter(function(n){ return n.unread; }).length : 0;
   tiles = tiles.filter(function(t){ return allowed[t.id]; });
   return '<div class="module-grid">' + tiles.map(function(t){
-    return '<button class="module-tile" onclick="navTo(\'' + t.id + '\')"><span class="mi">' + icons[t.id] + '</span><b>' + t.t + '</b><p>' + t.d + '</p></button>';
+    return '<button class="module-tile" onclick="navTo(\'' + t.id + '\')"><span class="mi">' + icons[t.id] + '</span><b>' + t.t + (t.id === "notifications" && unread ? ' <span class="chip blue" style="margin-left:4px">' + unread + ' new</span>' : "") + '</b><p>' + t.d + '</p><span aria-hidden="true" style="position:absolute;top:16px;right:16px;color:var(--faint);font-size:18px">›</span></button>';
   }).join("") + '</div>';
+}
+function overviewHeroHTML(){
+  var cd = inCooldown();
+  var isMod = S.role === "Moderator";
+  return '<div class="card" style="margin-bottom:16px;background:linear-gradient(120deg,#1B1B1E,#141416 55%,rgba(201,162,39,.10));border-color:rgba(201,162,39,.35)">' +
+  '<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px">' +
+  '<h2 style="margin:0 0 4px;font-size:21px;color:#fff">Welcome back</h2>' +
+  '<p class="muted" style="margin:0;font-size:14px">' + esc(S.planName) + ' plan · <b style="color:#fff">' + remaining() + ' searches remaining</b> · ' + statusBadge(keyStatus()) + (cd ? ' · <b style="color:#FFD166">24-hour cooldown active</b>' : '') + '</p></div>' +
+  '<div style="display:flex;gap:9px;flex-wrap:wrap">' + (isMod ? '<button class="btn btn-primary" onclick="navTo(\'keygen\')">Generate Key</button>' : '<button class="btn btn-primary" onclick="navTo(\'search\')">Number Lookup</button>') + '<button class="btn btn-gold" onclick="navTo(\'plans\')">Plans &amp; Payment</button><button class="btn btn-ghost" onclick="navTo(\'wallet\')">Wallet</button></div></div></div>';
 }
 function usageCardHTML(){
   var planObj = planById(S.planId);
@@ -2042,7 +2051,9 @@ function pageOverview(){
   var recent = (S.role === "Moderator") ? [] : S.history.slice(0, 3);
   var isMod = S.role === "Moderator";
   return warnBanners() +
-  '<div class="grid3" style="margin-bottom:16px">' +
+  overviewHeroHTML() +
+  '<div class="page-head" style="margin:0 0 12px"><h2 style="font-size:17px">Menu</h2><p>Every module, one tap away.</p></div>' + moduleTiles() +
+  '<div class="grid3" style="margin-bottom:16px;margin-top:16px">' +
     '<div class="stat" style="display:flex;gap:16px;align-items:center"><div class="ring"><svg width="96" height="96"><circle cx="48" cy="48" r="46" stroke="#232326" stroke-width="7" fill="none"/><circle id="big-ring-c" cx="48" cy="48" r="46" stroke="#C9A227" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="289" stroke-dashoffset="289"/></svg><div class="rt"><b data-count="' + remaining() + '">' + remaining() + '</b><span>remaining</span></div></div><div><div class="k">Searches</div><div class="s" style="margin-top:4px">' + (S.planId === "free" ? (S.freeUsed || 0) + " of " + FREE_LIMIT + " free used" : (S.limit > 0 ? S.used + " used of " + S.limit : S.dailyUsed + " used today")) + '<br>' + usedPct() + '% of limit</div></div></div>' +
     '<div class="stat"><div class="k">Current Plan</div><div class="v">' + esc(S.planName) + '</div><div class="s">' + (S.planId === "free" ? freeLeft() + " free searches left · then 24h cooldown" : "Expires in " + fmtDur(Math.max(0, (S.expiryTs || 0) - Date.now()))) + '</div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="navTo(\'plans\')">Manage Plan</button><button class="btn btn-ghost btn-sm" onclick="openExtend()">Extend Key</button></div></div>' +
     '<div class="stat"><div class="k">Today</div><div class="v">' + (S.planId === "free" ? '<span data-count="' + (S.freeUsed || 0) + '">' + (S.freeUsed || 0) + '</span> <span style="font-size:15px;color:var(--muted)">/ ' + FREE_LIMIT + ' free</span>' : '<span data-count="' + S.dailyUsed + '">' + S.dailyUsed + '</span> <span style="font-size:15px;color:var(--muted)">/ ' + S.dailyLimit + '</span>') + '</div><div class="s">Daily limit set by Admin at key generation</div><div class="progress" style="margin-top:10px"><i style="width:' + usedPct() + '%"></i></div></div>' +
@@ -2050,8 +2061,7 @@ function pageOverview(){
   '<div style="margin-bottom:16px">' + walletCardHTML("compact") + '</div>' +
   usageCardHTML() +
   weeklyChartHTML() +
-  '<div class="page-head" style="margin:22px 0 12px"><h2 style="font-size:17px">Modules</h2></div>' + moduleTiles() +
-  (isMod ? "" : '<div class="search-panel" style="margin-top:18px"><h3>Number Lookup</h3><p>Enter exactly 10 digits — no +91, no spaces. Operator, country, line type and validity.</p><div class="search-row"><input id="ov-q" class="big-input" type="tel" inputmode="numeric" maxlength="13" placeholder="10-digit number" aria-label="Phone number" onkeydown="if(event.key===\'Enter\')doSearch(\'overview\')"><button class="btn btn-primary" onclick="doSearch(\'overview\')">SEARCH</button></div><div id="ov-result"></div></div>') +
+  (isMod ? "" : '<div class="search-panel" style="margin-top:18px"><h3>Number Lookup</h3><p>Enter exactly 10 digits — no +91, no spaces. Validity, operator, circle and records found.</p><div class="search-row"><input id="ov-q" class="big-input" type="tel" inputmode="numeric" maxlength="13" placeholder="10-digit number" aria-label="Phone number" onkeydown="if(event.key===\'Enter\')doSearch(\'overview\')"><button class="btn btn-primary" onclick="doSearch(\'overview\')">SEARCH</button></div><div id="ov-result"></div></div>') +
   '<div class="grid2" style="margin-top:16px">' + (isMod ? "" : '<div class="card"><h3 style="margin:0 0 10px;font-size:16px">Recent Searches</h3>' +
     (recent.length ? recent.map(function(h){ return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line2);align-items:center"><b class="mono" style="flex:1">' + esc(h.q) + '</b><span class="muted small">' + esc(h.fields.operator || "") + '</span>' + histStatusChip(h) + '</div>'; }).join("") + '<button class="btn btn-ghost btn-sm" style="margin-top:12px" onclick="navTo(\'history\')">Full History</button>'
     : '<p class="muted small" style="margin:0">No searches yet in this session.</p>') +
@@ -2061,11 +2071,11 @@ function pageOverview(){
   '</div></div>';
 }
 function pageSearch(){
-  return '<div class="page-head"><h2>Number Lookup</h2><p>Phone number validation — operator, country, line type and validity only.</p></div>' +
+  return '<div class="page-head"><h2>Number Lookup</h2><p>Phone number validation — validity, operator, circle and records found.</p></div>' +
   limitBannerHTML() +
   '<div class="search-panel"><h3>Enter Number</h3><p>' + remaining() + ' searches remaining' + (S.planId === "free" ? ' · free tier' : ' · ' + S.dailyUsed + ' of ' + S.dailyLimit + ' used today') + '.</p><div class="search-row"><input id="search-q" class="big-input" type="tel" inputmode="numeric" maxlength="13" placeholder="10-digit number" aria-label="Phone number" onkeydown="if(event.key===\'Enter\')doSearch(\'search\')"><button class="btn btn-primary" onclick="doSearch(\'search\')">SEARCH</button></div></div>' +
   '<div id="search-result"></div>' +
-  (S.history.length ? '<div class="card" style="margin-top:16px"><h3 style="margin:0 0 8px;font-size:16px">Recent</h3>' + S.history.slice(0, 4).map(function(h){ return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line2);align-items:center"><b class="mono" style="flex:1">' + esc(h.q) + '</b><span class="muted small">' + esc(h.fields.operator || "") + (h.fields.operator && h.fields.lineType ? " · " : "") + esc(h.fields.lineType || "") + '</span>' + histStatusChip(h) + '</div>'; }).join("") + '</div>' : "");
+  (S.history.length ? '<div class="card" style="margin-top:16px"><h3 style="margin:0 0 8px;font-size:16px">Recent</h3>' + S.history.slice(0, 4).map(function(h){ return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line2);align-items:center"><b class="mono" style="flex:1">' + esc(h.q) + '</b><span class="muted small">' + esc(h.fields.operator || "") + (h.fields.operator && h.fields.circle ? " · " : "") + esc(h.fields.circle || "") + '</span>' + histStatusChip(h) + '</div>'; }).join("") + '</div>' : "");
 }
 var histPage = 1;
 function pageHistory(){
@@ -2074,10 +2084,10 @@ function pageHistory(){
   if(histPage > pages) histPage = pages;
   var slice = S.history.slice((histPage - 1) * per, histPage * per);
   var rows = slice.map(function(h){
-    return '<tr><td data-label="Number"><b class="mono">' + esc(h.q) + '</b></td><td data-label="Operator">' + esc(h.fields.operator || "—") + '</td><td data-label="Country">' + esc(h.fields.country || "—") + '</td><td data-label="Line Type">' + esc(h.fields.lineType || "—") + '</td><td data-label="Status">' + histStatusChip(h) + '</td><td data-label="Time" class="muted small">' + fmtDT(h.when) + '</td></tr>';
+    return '<tr><td data-label="Number"><b class="mono">' + esc(h.q) + '</b></td><td data-label="Operator">' + esc(h.fields.operator || "—") + '</td><td data-label="Circle">' + esc(h.fields.circle || "—") + '</td><td data-label="Records">' + (typeof h.fields.records === "number" ? h.fields.records : "—") + '</td><td data-label="Status">' + histStatusChip(h) + '</td><td data-label="Time" class="muted small">' + fmtDT(h.when) + '</td></tr>';
   }).join("");
   return '<div class="page-head"><h2>Search History</h2><p>' + S.history.length + ' search(es) · retained for 90 days.</p></div>' +
-  '<div class="card" style="padding:8px 16px"><div class="table-scroll"><table class="hist"><thead><tr><th>Number</th><th>Operator</th><th>Country</th><th>Line Type</th><th>Status</th><th>Time</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+  '<div class="card" style="padding:8px 16px"><div class="table-scroll"><table class="hist"><thead><tr><th>Number</th><th>Operator</th><th>Circle</th><th>Records</th><th>Status</th><th>Time</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
   '<div class="pager"><span class="tiny muted">Page ' + histPage + ' of ' + pages + '</span><button class="btn btn-ghost btn-sm" ' + (histPage <= 1 ? "disabled" : 'onclick="histPage--;navTo(\'history\')"') + '>Previous</button><button class="btn btn-ghost btn-sm" ' + (histPage >= pages ? "disabled" : 'onclick="histPage++;navTo(\'history\')"') + '>Next</button></div></div>';
 }
 function pageNotifications(){
@@ -2209,6 +2219,7 @@ function checkoutHTML(prefix){
     '<label class="flabel" for="' + prefix + '-pay-email">' + (ps.kind === "topup" ? "Email (top-up updates will be sent here)" : ps.kind === "extend" ? "Email (extension updates will be sent here)" : "Email (key will be delivered here)") + '</label><input type="email" id="' + prefix + '-pay-email" placeholder="you@example.com" value="' + esc(ps.email || (S ? S.email : "") || "") + '" oninput="payFormChanged(\'' + prefix + '\')">' +
     (ps.kind === "topup" ? "" : '<label class="flabel" for="' + prefix + '-pay-code" style="margin-top:12px">Payment Code (optional)</label><div style="display:flex;gap:8px"><input type="text" id="' + prefix + '-pay-code" placeholder="Enter code" value="' + esc(ps.codeInput || "") + '" style="flex:1"><button class="btn btn-ghost btn-sm" onclick="applyPayCode(\'' + prefix + '\')">Apply</button></div>') +
     (ps.kind === "topup" ? "" : (ps.bill.codeMsg ? '<p class="tiny" style="margin:6px 0 0;color:' + (ps.bill.code ? "var(--green)" : "var(--amber)") + '">' + esc(ps.bill.codeMsg) + '</p>' : '<p class="tiny muted" style="margin:6px 0 0">Codes are issued by Admin and apply a benefit at checkout.</p>')) +
+    (ps.kind === "topup" ? "" : '<label class="flabel" for="' + prefix + '-pay-ref" style="margin-top:12px">Referral Code (optional)</label><input type="text" id="' + prefix + '-pay-ref" placeholder="Referral code, if someone referred you" autocomplete="off" spellcheck="false">') +
     '<div style="margin-top:14px">' + billHTML(ps.bill) + '</div>' +
     (ps.walletPart ? '<p class="tiny muted" style="margin:8px 0 0">Includes ' + inr(ps.walletPart) + ' from your wallet on approval — the QR amount above is the remaining payable.</p>' : "") +
     '<label class="flabel" for="' + prefix + '-pay-utr" style="margin-top:14px">UTR / Transaction ID</label><input type="text" id="' + prefix + '-pay-utr" placeholder="e.g. 12-digit UTR" oninput="payFormChanged(\'' + prefix + '\')">' +
@@ -2278,6 +2289,7 @@ function submitPayment(prefix){
   function fail(html){ if(err) err.innerHTML = '<div class="banner red"><span class="bi">●</span><div>' + html + '</div></div>'; }
   if(!ps){ fail("<b>Session expired.</b> Select the plan again to start a new payment session."); return; }
   var email = $(prefix + "-pay-email").value.trim(), utr = $(prefix + "-pay-utr").value.trim(), file = payFiles[prefix], shot = payShotData[prefix];
+  var refEl = $(prefix + "-pay-ref"); var refCode = refEl ? refEl.value.trim() : "";
   if(!/.+@.+\..+/.test(email)){ fail("<b>Enter a valid email.</b> Your key is delivered there after approval."); return; }
   if(!/^[A-Za-z0-9]{8,22}$/.test(utr)){ fail("<b>Enter a valid UTR / Transaction ID</b> (8–22 letters or digits)."); return; }
   if(!file || !shot){ fail("<b>Attach the payment screenshot.</b>"); return; }
@@ -2290,10 +2302,11 @@ function submitPayment(prefix){
   var record = {id:"PAY-" + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 90 + 10), idem:ps.idem, planId:ps.planId, planName:ps.planName, kind:ps.kind, extDays:ps.extDays, amount:ps.bill.final, email:email, utr:utr, screenshot:file, method:(ps.walletPart ? "WALLET+UPI" : "UPI"), walletAmount:ps.walletPart || 0, status:"PROCESSING", when:fmtDT(new Date()), ts:Date.now(), declineReason:"", keyValue:""};
   function done(){
     pays.unshift(record); savePayments(pays);
+    if(S) refreshPaymentsFromBackend();
     lsDel("paysession"); payFiles = {}; payShotData = {}; submitting = false;
     pushPayNotif("•", "Payment submitted — PROCESSING", "Your " + record.planName + " payment (" + inr(record.amount) + ", UTR " + utr + ") is with Admin for verification. Request ID: " + record.id + ".");
     if(S) pushNotif("•", "Payment submitted — PROCESSING", "Request " + record.id + " for the " + record.planName + " plan is awaiting Admin approval.");
-    toast("<b>Payment request submitted.</b> Status: PROCESSING. It now appears in Payment History — exactly one request was created.");
+    toast("<b>Payment request submitted.</b> Request ID: " + esc(record.id) + " · Status: PROCESSING. It now appears in Payment History.");
     renderPreChrome(); renderBuyPanel(); renderPreHistories();
     if(S) navTo("payhistory"); else showPre("payhistory");
   }
@@ -2302,16 +2315,27 @@ function submitPayment(prefix){
     fail("<b>Submission failed.</b><br><span class='small'>" + (e && e.message ? esc(e.message) : "The server did not accept the request. Your session is kept — try again.") + "</span>");
   }
   if(ps.kind === "topup"){
-    apiCall("/api/wallet/topup", "POST", {amount:ps.bill.final, utr:utr}).then(function(resp){
+    apiCall("/api/wallet/topup", "POST", {amount:ps.bill.final, utr:utr, screenshot:shot}).then(function(resp){
       if(resp && resp.request_id) record.id = resp.request_id;
       done();
     }).catch(submitFailed);
   } else {
-    apiCall("/api/payments/submit", "POST", {plan:ps.planName, amount:ps.bill.final, utr:utr, screenshot:shot, email:email}).then(function(resp){
+    // /api/payments/submit is public: no access-key header before
+    // login; the session key is sent only when the user is signed in.
+    apiCall("/api/payments/submit", "POST", {plan:ps.planName, amount:ps.bill.final, utr:utr, screenshot:shot, email:email, referral_code:refCode}, S ? S.key : "").then(function(resp){
       if(resp && resp.request_id) record.id = resp.request_id;
       done();
     }).catch(submitFailed);
   }
+}
+/* Payment History is backend-authoritative: after a submit (and on
+   entry) the list is re-read from GET /api/payments. */
+function refreshPaymentsFromBackend(){
+  if(!S) return;
+  apiCall("/api/payments", "GET").then(function(data){
+    var list = (data && (data.payments || data.items)) || null;
+    if(list) savePayments(list.map(normPayment));
+  }).catch(function(){});
 }
 
 /* ================= BUY KEY (pre-login) + PLANS (in-app) ================= */
@@ -2379,10 +2403,10 @@ function showInfo(title, html){
   $("confirm-yes").textContent = "Close"; confirmCb = null;
   $("confirm-modal").classList.add("open");
 }
-/* ---------- PREMIUM ACCESS KEY CARD ----------
+/* ---------- ACCESS KEY DISPLAY ----------
    Key format: HYPERXVICKY-XXXX-XXXX-XXXX. Keys are generated by the
-   backend in this format and are always displayed here inside the
-   premium card — never as plain text. */
+   backend in this format and are shown as one plain line — monospace
+   key, Show/Hide and Copy buttons, status and expiry countdown. */
 var AK_KEYS = {}, AK_SHOWN = {};
 function maskAccessKey(v){
   v = String(v || "");
@@ -2401,16 +2425,15 @@ function accessKeyCardHTML(k, id){
   AK_KEYS[id] = value;
   var shown = !!AK_SHOWN[id];
   var st = String(k.status || "ACTIVE").toUpperCase();
-  var dotCls = st === "ACTIVE" ? "" : (st === "EXPIRED" || st === "REVOKED" ? " red" : " amber");
-  var exp = k.expiryTs ? '<span class="kb-meta">⏳ <span data-tick="keyexp" data-ts="' + k.expiryTs + '">' + fmtDur(k.expiryTs - Date.now()) + '</span> left</span>' : (k.active && S && S.expiryTs ? '<span class="kb-meta">⏳ <span data-tick="keyexp" data-ts="' + S.expiryTs + '">' + fmtDur(S.expiryTs - Date.now()) + '</span> left</span>' : "");
-  var plan = k.planName ? '<span class="kb-meta">' + esc(k.planName) + '</span>' : "";
-  return '<div class="key-banner" role="group" aria-label="Access key banner">' +
-  '<svg class="kb-chip" viewBox="0 0 52 40" aria-hidden="true"><defs><linearGradient id="kb-chip-g-' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F6D47C"/><stop offset=".5" stop-color="#E3B34C"/><stop offset="1" stop-color="#C8932F"/></linearGradient></defs><rect x="1" y="1" width="50" height="38" rx="7" fill="url(#kb-chip-g-' + id + ')" stroke="#9A741F" stroke-width="1.5"/><path d="M1 14h15M1 26h15M36 14h15M36 26h15M16 8v24M36 8v24" stroke="#9A741F" stroke-width="1.4" fill="none"/><rect x="16" y="14" width="20" height="12" rx="2.5" fill="none" stroke="#9A741F" stroke-width="1.4"/></svg>' +
-  '<span class="kb-dot' + dotCls + '" aria-hidden="true"></span>' +
-  '<span class="kb-key" id="ak-val-' + id + '">' + esc(shown ? value : maskAccessKey(value)) + '</span>' +
-  plan + exp +
-  '<span class="kb-btns"><button type="button" class="kb-btn" id="ak-eye-' + id + '" onclick="toggleAkKey(\'' + id + '\')">' + (shown ? "Hide" : "Show") + '</button>' +
-  '<button type="button" class="kb-btn" onclick="copyText(\'' + esc(value).replace(/'/g, "") + '\', \'Access Key\')">Copy</button></span></div>';
+  var expTs = k.expiryTs || (k.active && S ? S.expiryTs : 0);
+  var meta = "";
+  if(k.planName) meta += esc(k.planName);
+  if(expTs) meta += (meta ? " · " : "") + 'Expires in <span data-tick="keyexp" data-ts="' + expTs + '">' + fmtDur(expTs - Date.now()) + '</span>';
+  return '<div class="key-line" role="group" aria-label="Access key">' +
+  '<span class="kl-key" id="ak-val-' + id + '">' + esc(shown ? value : maskAccessKey(value)) + '</span>' +
+  '<span class="kl-meta">' + statusBadge(st) + (meta ? '<span>' + meta + '</span>' : "") + '</span>' +
+  '<span class="kl-btns"><button type="button" class="btn btn-ghost btn-sm" id="ak-eye-' + id + '" onclick="toggleAkKey(\'' + id + '\')">' + (shown ? "Hide" : "Show") + '</button>' +
+  '<button type="button" class="btn btn-ghost btn-sm" onclick="copyText(\'' + esc(value).replace(/'/g, "") + '\', \'Access Key\')">Copy</button></span></div>';
 }
 function keyHistoryHTML(includeActive){
   var keys = getGenKeys().slice();
@@ -2483,6 +2506,7 @@ function pageWallet(){
       '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px"><button class="btn btn-primary" id="topup-start-btn" onclick="startTopup()">Top Up <span id="topup-amount-view">' + inr(topupSel) + '</span> via UPI</button><span class="tiny muted">A payment session opens below with the QR for the exact amount.</span></div>') +
   '</div>' +
   '<div id="wallet-checkout" style="margin-bottom:16px"></div>' +
+  '<div class="card" style="padding:8px 16px;margin-bottom:16px"><h3 style="margin:12px 0 4px;font-size:16px">Top-Up Requests</h3><p class="muted small" style="margin:0 0 6px">Your wallet top-up requests and their status. Your balance is credited only after Admin approval.</p><div id="topup-requests"><p class="muted small" style="margin:6px 0 12px">Loading your top-up requests…</p></div></div>' +
   '<div class="grid3" style="margin-bottom:16px"><div class="stat"><div class="k">Wallet Balance</div><div class="v" data-count="' + S.walletBalance + '" data-fmt="inr">' + inr(S.walletBalance) + '</div><div class="s">' + (S.walletEnabled ? "Wallet payment is enabled" : "Wallet payment is disabled by Admin") + '</div></div>' +
   '<div class="stat"><div class="k">Use Wallet For</div><div class="s" style="margin-top:6px;font-size:13.5px">Buy Key and Extend Key at checkout. If the balance is short, pay the remaining amount by UPI in the same checkout.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-primary btn-sm" onclick="navTo(\'plans\')">Buy / Extend</button><button class="btn btn-ghost btn-sm" onclick="openExtend()">Extend Key</button></div></div>' +
   '<div class="stat"><div class="k">Referral Earnings</div><div class="s" style="margin-top:6px;font-size:13.5px">Commission from referred 1-year plans is credited here. See the Referral module.</div><button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="navTo(\'referral\')">Open Referral</button></div></div>' +
@@ -2555,7 +2579,8 @@ function pageReferral(){
   }).join("");
   return '<div class="page-head"><h2>Referral</h2><p>Share your code. Rewards apply under the referral terms below.</p></div>' +
   '<div class="grid2"><div class="card"><label class="flabel">Your Referral Code</label><div style="display:flex;gap:9px;flex-wrap:wrap"><input type="text" id="ref-code" readonly value="' + esc(S.referralCode || "—") + '" style="flex:1;min-width:160px;font-weight:700;letter-spacing:.04em"><button class="btn btn-primary" onclick="copyRef()">Copy Code</button></div>' +
-  '<p class="muted small" style="margin:12px 0 0">A referred user must purchase at least the ₹49 Starter plan for referral benefits to apply.</p></div>' +
+  '<label class="flabel" style="margin-top:14px">Your Referral Link</label><div style="display:flex;gap:9px;flex-wrap:wrap"><input type="text" id="ref-link" readonly value="' + esc(S.referralLink || "") + '" placeholder="Referral link" style="flex:1;min-width:160px"><button class="btn btn-ghost" onclick="copyRefLink()">Copy Link</button><button class="btn btn-gold" onclick="shareRef()">Share</button></div>' +
+  '<p class="muted small" style="margin:12px 0 0">People referred: <b style="color:#fff">' + (S.referredCount || 0) + '</b>. A referred user must purchase at least the ₹49 Starter plan for referral benefits to apply. When your code is entered on the Buy Key payment form, the referred user gets 10 extra searches on approval.</p></div>' +
   '<div class="card"><h3 style="margin:0 0 10px;font-size:16px;color:#fff">Referral Wallet</h3><div class="stat" style="border:0;padding:0;background:none"><div class="k">Balance (shared with Wallet)</div><div class="v">' + inr(S.walletBalance) + '</div></div>' +
   '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:14px"><button class="btn btn-primary btn-sm" onclick="redeemWallet(\'Play Store redeem code\')">Redeem — Play Store Code</button><button class="btn btn-ghost btn-sm" onclick="redeemWallet(\'Paytm / UPI\')">Redeem — Paytm / UPI</button><button class="btn btn-ghost btn-sm" onclick="navTo(\'wallet\')">Wallet History</button></div></div></div>' +
   '<div class="grid3" style="margin-top:16px"><div class="card"><h3 style="margin:0 0 5px;font-size:15px;color:#fff">For the referred user</h3><p class="muted small" style="margin:0">10 free searches when your referral code is used.</p></div><div class="card"><h3 style="margin:0 0 5px;font-size:15px;color:#fff">Plan discount</h3><p class="muted small" style="margin:0">A random 15%–30% discount on the referred user\'s own plan purchase.</p></div><div class="card"><h3 style="margin:0 0 5px;font-size:15px;color:#fff">Your commission</h3><p class="muted small" style="margin:0">10% commission when a referred user buys the 1-year plan, credited to your wallet.</p></div></div>' +
@@ -2566,6 +2591,44 @@ function copyRef(){
   var v = $("ref-code").value;
   if(!v || v === "—"){ toast("No referral code available on this key yet."); return; }
   copyText(v, "Referral code");
+}
+function copyRefLink(){
+  var el = $("ref-link"); var v = el ? el.value.trim() : "";
+  if(!v){ toast("No referral link available on this key yet."); return; }
+  copyText(v, "Referral link");
+}
+function shareRef(){
+  var link = S.referralLink || "";
+  var text = refInviteText() + (link ? "\n" + link : "");
+  if(navigator.share){
+    navigator.share({title:"VickyxHyper", text:text}).catch(function(){});
+  } else {
+    copyText(text, "Invite message");
+  }
+}
+/* Referral data is backend-authoritative: GET /api/referral returns
+   {code, link, referred_count, referrals}. */
+function loadReferral(){
+  if(!S) return;
+  apiCall("/api/referral", "GET").then(function(d){
+    if(!d || !S) return;
+    var changed = false;
+    if(d.code && d.code !== S.referralCode){ S.referralCode = d.code; changed = true; }
+    if(d.link && d.link !== S.referralLink){ S.referralLink = d.link; changed = true; }
+    if(typeof d.referred_count === "number" && d.referred_count !== S.referredCount){ S.referredCount = d.referred_count; changed = true; }
+    if(Array.isArray(d.referrals)){
+      var sig = JSON.stringify(d.referrals);
+      if(sig !== S._refSig){
+        S._refSig = sig;
+        S.referrals = d.referrals.map(function(r){
+          return {name:(r.name || r.email || ""), plan:(r.plan || r.plan_name || ""), date:(r.date || (r.created_at ? fmtDT(r.created_at) : "")), status:(r.status || "Joined"), commission:(typeof r.commission === "number" ? r.commission : 0)};
+        });
+        changed = true;
+      }
+    }
+    if(changed && currentPage === "referral") navTo("referral");
+    if(currentPage === "profile" && changed) navTo("profile");
+  }).catch(function(){});
 }
 /* ---------- REFERRAL SHARE CARD (with QR) ---------- */
 function refShareCardHTML(){
@@ -2669,7 +2732,7 @@ function pageSupport(){
     ["Why is Submit Payment Request disabled?", "Both the UTR / Transaction ID and the payment screenshot are mandatory. The button activates only when a valid email, a valid UTR and a screenshot are all provided."],
     ["When does a payment appear in Payment History?", "Only after a successful submission. Opening Buy Key, selecting a plan or generating the QR creates no history and no payment request."],
     ["When do I receive my key after payment?", "After Admin verifies and approves your payment. Approval is manual and never automatic. On approval the key appears in Key History and Notifications with a Copy Key button. If a payment is declined, no key is generated and the Admin-recorded reason is shown to you."],
-    ["What does a lookup result show?", "Only the fields the lookup returns — such as validity, operator/carrier, country and line type. Missing fields are never invented, and no name or email is derived from a number."],
+    ["What does a lookup result show?", "Only the safe summary the lookup returns — validity, operator, circle, records found and searches remaining. Personal details are never shown, and no name or email is derived from a number."],
     ["What are Saved Numbers and the Spam Score?", "Saved Numbers are your own favourites: a number plus a label you choose, stored for your key on this device, with one-tap re-search. The Spam Score on a result is indicative only — it is built from public validation signals (validity, operator, line type) and spam reports, and it never shows any personal data. You can also report a number as spam from the result."],
     ["How do device sessions work?", "Profile lists the devices signed in with your key. You can sign out any other device, or all other devices at once, from Profile → Devices. This device always stays signed in unless you log out."],
     ["When does the session end?", "After 12 hours of inactivity, with a warning 10 minutes before sign-out. Signing out invalidates the session."],
